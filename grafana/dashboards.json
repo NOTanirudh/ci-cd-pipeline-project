@@ -1,0 +1,16 @@
+{
+    "dashboard": {
+      "id": null,
+      "title": "Microservice Metrics",
+      "panels": [
+        {
+          "title": "HTTP Requests",
+          "type": "graph",
+          "targets": [
+            {"expr": "http_requests_total"}
+          ]
+        }
+      ]
+    }
+  }
+  

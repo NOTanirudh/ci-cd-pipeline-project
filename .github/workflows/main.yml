@@ -1,0 +1,23 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install deps
+        run: pip install -r user-service/requirements.txt
+      - name: Test
+        run: pytest user-service/test_app.py
+      - name: Build Docker image
+        run: docker build -t user-service:latest user-service/
+      - name: K8s Deploy
+        run: kubectl apply -f k8s/

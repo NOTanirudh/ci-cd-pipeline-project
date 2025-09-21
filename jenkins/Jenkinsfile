@@ -1,0 +1,23 @@
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Install Deps') {
+      steps { sh 'pip install -r user-service/requirements.txt' }
+    }
+    stage('Test') {
+      steps { sh 'pytest user-service/test_app.py' }
+    }
+    stage('Build Docker Image') {
+      steps { sh 'docker build -t user-service:latest user-service/' }
+    }
+    stage('Push Image') {
+      steps { echo 'Push to DockerHub (add credentials here)' }
+    }
+    stage('Deploy to K8s') {
+      steps { sh 'kubectl apply -f k8s/' }
+    }
+  }
+}
