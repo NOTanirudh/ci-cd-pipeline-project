@@ -1,5 +1,11 @@
 pipeline {
   agent any
+  environment {
+    // DockerHub repository configuration
+    DOCKER_REPOSITORY = "spidey005/user-service"
+    // Credentials ID that must be created in Jenkins for docker registry
+    DOCKER_REGISTRY_CREDENTIALS = 'dockerhub-creds'
+  }
   stages {
     stage('Checkout') {
       steps { checkout scm }
@@ -8,16 +14,35 @@ pipeline {
       steps { sh 'pip install -r user-service/requirements.txt' }
     }
     stage('Test') {
-      steps { sh 'pytest user-service/test_app.py' }
+      steps { sh 'pytest -q user-service' }
     }
     stage('Build Docker Image') {
-      steps { sh 'docker build -t user-service:latest user-service/' }
+      steps {
+        script {
+          // Use build number so each image has a unique tag
+          IMAGE_TAG = "${DOCKER_REPOSITORY}:${env.BUILD_NUMBER}"
+          sh "docker build -t ${IMAGE_TAG} user-service/"
+        }
+      }
     }
     stage('Push Image') {
-      steps { echo 'Push to DockerHub (add credentials here)' }
+      steps {
+        withCredentials([usernamePassword(credentialsId: DOCKER_REGISTRY_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+          sh 'docker push ${DOCKER_REPOSITORY}:${env.BUILD_NUMBER}'
+        }
+      }
     }
     stage('Deploy to K8s') {
-      steps { sh 'kubectl apply -f k8s/' }
+      steps {
+        // Prefer a rolling update by setting the image on the deployment. Fall back to apply if deployment doesn't exist.
+        sh "kubectl set image deployment/user-service user-service=${DOCKER_REPOSITORY}:${env.BUILD_NUMBER} --record || kubectl apply -f k8s/"
+      }
+    }
+  }
+  post {
+    always {
+      sh 'docker logout || true'
     }
   }
 }

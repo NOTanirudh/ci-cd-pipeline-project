@@ -14,6 +14,31 @@ spec:
     spec:
       containers:
       - name: user-service
-        image: user-service:latest
+        # image will be updated by CI (jenkins) to a tagged image
+        image: user-service:local
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5000
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        env:
+          - name: FLASK_ENV
+            value: production
