@@ -1,0 +1,17 @@
+# Ignore environment files containing secrets
+.env
+cicd-dashboard/.env
+
+# Ignore Python cache
+__pycache__/
+**/__pycache__/
+
+# Ignore local docker/user archives
+*.tar
+
+# Node modules and build artifacts
+node_modules/
+build/
+
+# Logs
+.log
