@@ -1,9 +1,9 @@
 pipeline {
   agent any
   environment {
-    // Replace with your Docker Hub namespace or registry host
-    DOCKER_REPOSITORY = "mydockerhubuser/user-service"
-    // Credentials ID that must be created in Jenkins for docker registry (username/password)
+    // DockerHub repository configuration
+    DOCKER_REPOSITORY = "spidey005/user-service"
+    // Credentials ID that must be created in Jenkins for docker registry
     DOCKER_REGISTRY_CREDENTIALS = 'dockerhub-creds'
   }
   stages {

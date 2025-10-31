@@ -8,6 +8,79 @@ import json
 from datetime import datetime
 from flask import request
 import tempfile
+from flask_cors import CORS
+
+def trigger_github_workflow(repo, branch):
+    """Trigger GitHub Actions workflow."""
+    token = os.getenv('GITHUB_TOKEN')
+    if not token:
+        return False, "GitHub token not configured"
+        
+    # Extract owner/repo from clone URL
+    parts = repo.rstrip('.git').split('/')
+    if len(parts) < 2:
+        return False, "Invalid repository URL"
+    owner_repo = '/'.join(parts[-2:])
+    
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    
+    url = f'https://api.github.com/repos/{owner_repo}/actions/workflows'
+    
+    try:
+        # List workflows
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            return False, f"Failed to list workflows: {response.text}"
+            
+        workflows = response.json()
+        if not workflows.get('workflows'):
+            return False, "No workflows found"
+            
+        # Trigger the first available workflow
+        workflow_id = workflows['workflows'][0]['id']
+        trigger_url = f'{url}/{workflow_id}/dispatches'
+        
+        data = {
+            'ref': branch
+        }
+        
+        response = requests.post(trigger_url, headers=headers, json=data)
+        if response.status_code == 204:
+            return True, "GitHub Actions workflow triggered successfully"
+        return False, f"Failed to trigger workflow: {response.text}"
+        
+    except Exception as e:
+        return False, str(e)
+
+def trigger_jenkins_job(repo, branch):
+    """Trigger Jenkins job."""
+    jenkins_url = os.getenv('JENKINS_URL')
+    jenkins_job = os.getenv('JENKINS_JOB')
+    jenkins_token = os.getenv('JENKINS_TOKEN')
+    
+    if not all([jenkins_url, jenkins_job, jenkins_token]):
+        return False, "Jenkins configuration incomplete"
+        
+    try:
+        # Build URL with parameters
+        params = {
+            'token': jenkins_token,
+            'GIT_REPO': repo,
+            'GIT_BRANCH': branch
+        }
+        
+        build_url = f'{jenkins_url}/job/{jenkins_job}/buildWithParameters'
+        response = requests.post(build_url, params=params)
+        
+        if response.status_code == 201:
+            return True, "Jenkins job triggered successfully"
+        return False, f"Failed to trigger Jenkins job: {response.status_code}"
+        
+    except Exception as e:
+        return False, str(e)
 import shutil
 import time
 
@@ -279,33 +352,169 @@ def _run_cmd(cmd, cwd=None, timeout=600):
 
 
 @app.route('/api/trigger', methods=['POST'])
+def get_ci_config():
+    """Get CI configuration from environment variables."""
+    return {
+        'github_token': os.environ.get('GITHUB_TOKEN'),
+        'jenkins_url': os.environ.get('JENKINS_URL'),
+        'jenkins_job': os.environ.get('JENKINS_JOB'),
+        'jenkins_user': os.environ.get('JENKINS_USER'),
+        'jenkins_token': os.environ.get('JENKINS_TOKEN')
+    }
+
+def trigger_github_workflow(repo, branch):
+    """Trigger GitHub Actions workflow via API."""
+    token = os.environ.get('GITHUB_TOKEN')
+    if not token:
+        return None, "GitHub token not configured"
+    
+    try:
+        # Trigger workflow_dispatch event
+        owner, repo_name = repo.split('/')
+        url = f"https://api.github.com/repos/{repo}/actions/workflows/ci-cd.yml/dispatches"
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+            "Authorization": f"token {token}",
+        }
+        data = {"ref": branch}
+        
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 204:
+            return True, "GitHub Actions workflow triggered successfully"
+        return False, f"Failed to trigger workflow: {response.status_code}"
+    except Exception as e:
+        return False, f"Error triggering GitHub Actions: {str(e)}"
+
+def trigger_jenkins_job(repo, branch):
+    """Trigger Jenkins job via API."""
+    jenkins_url = os.environ.get('JENKINS_URL')
+    jenkins_job = os.environ.get('JENKINS_JOB')
+    jenkins_user = os.environ.get('JENKINS_USER')
+    jenkins_token = os.environ.get('JENKINS_TOKEN')
+    
+    if not all([jenkins_url, jenkins_job]):
+        return None, "Jenkins URL/job not configured"
+    
+    try:
+        # Trigger Jenkins build
+        build_url = f"{jenkins_url.rstrip('/')}/job/{jenkins_job}/buildWithParameters"
+        params = {
+            'GITHUB_REPO': repo,
+            'BRANCH': branch
+        }
+        
+        auth = None
+        if jenkins_user and jenkins_token:
+            auth = (jenkins_user, jenkins_token)
+        
+        response = requests.post(build_url, params=params, auth=auth)
+        if response.status_code in (201, 200):
+            return True, "Jenkins job triggered successfully"
+        return False, f"Failed to trigger Jenkins job: {response.status_code}"
+    except Exception as e:
+        return False, f"Error triggering Jenkins job: {str(e)}"
+
 def trigger():
-    """Trigger a demo pipeline for the provided repo.
-
+    """Trigger a pipeline for the provided repo.
+    
     Expects JSON body: { "repo": "owner/repo", "branch": "main" }
-
-    This runs a synchronous sequence (clone -> tests -> docker build -> push -> deploy).
-    It is best-effort and intended for demos/local use. Requires git, docker and kubectl on PATH.
     """
     body = request.get_json() or {}
     repo = body.get('repo') or request.args.get('repo')
     branch = body.get('branch') or 'main'
+    
     if not repo:
-        return jsonify({'error': 'repo is required (owner/repo)'}), 400
+        return jsonify({
+            'pipelineStages': [{
+                'id': 'error',
+                'name': 'Input Validation',
+                'status': 'failed',
+                'detail': 'Repository (owner/repo) is required'
+            }]
+        }), 400
 
+    print(f"Starting pipeline for repo: {repo} branch: {branch}")
+    
+    # Create temp dir for clone
     tmp = tempfile.mkdtemp(prefix='pipeline_')
     stages = []
     start = time.time()
 
     try:
-        # 1) Clone
-        stages.append({'id': 1, 'name': 'Clone Repo', 'status': 'in_progress'})
+        # 1. Clone Repository with validation
+        stages.append({
+            'id': 1,
+            'name': 'Clone Repository',
+            'status': 'in_progress',
+            'detail': f'Cloning {repo} ({branch} branch)'
+        })
+
         clone_url = f'https://github.com/{repo}.git'
-        rc, out = _run_cmd(['git', 'clone', '--depth', '1', '--branch', branch, clone_url, tmp], cwd=None, timeout=120)
+        
+        # Verify repository exists
+        try:
+            resp = requests.head(f'https://github.com/{repo}')
+            if resp.status_code == 404:
+                stages[-1].update({
+                    'status': 'failed',
+                    'detail': f'Repository {repo} not found on GitHub'
+                })
+                return jsonify({'pipelineStages': stages}), 200
+        except Exception as e:
+            print(f'GitHub check failed: {e}')
+            
+        # Attempt clone with detailed error capture
+        rc, out = _run_cmd(['git', 'clone', '--depth', '1', '--branch', branch, clone_url, tmp])
         stages[-1]['log'] = out
-        stages[-1]['status'] = 'success' if rc == 0 else 'failed'
+        
         if rc != 0:
-            return jsonify({'pipelineStages': stages, 'metrics': {}, 'error': 'git clone failed'}), 200
+            error_detail = 'Unknown error'
+            if 'repository not found' in out.lower():
+                error_detail = 'Repository not found'
+            elif 'could not resolve host' in out.lower():
+                error_detail = 'Network error - could not reach GitHub'
+            elif 'authentication failed' in out.lower():
+                error_detail = 'Authentication failed'
+            elif 'branch not found' in out.lower():
+                error_detail = f'Branch {branch} not found'
+                
+            stages[-1].update({
+                'status': 'failed',
+                'detail': f'Clone failed: {error_detail}',
+                'log': out
+            })
+            
+            # Try to trigger CI instead
+            stages.append({
+                'id': 2,
+                'name': 'CI Trigger',
+                'status': 'in_progress',
+                'detail': 'Attempting to trigger CI pipeline'
+            })
+            
+            # Try GitHub Actions first
+            github_success, github_msg = trigger_github_workflow(repo, branch)
+            if github_success:
+                stages[-1].update({
+                    'status': 'success',
+                    'detail': github_msg
+                })
+                return jsonify({'pipelineStages': stages}), 200
+            
+            # Fallback to Jenkins
+            jenkins_success, jenkins_msg = trigger_jenkins_job(repo, branch)
+            if jenkins_success:
+                stages[-1].update({
+                    'status': 'success',
+                    'detail': jenkins_msg
+                })
+            else:
+                stages[-1].update({
+                    'status': 'failed',
+                    'detail': f'CI not configured properly. Set GITHUB_TOKEN or JENKINS_URL/JENKINS_JOB. Details: {github_msg}, {jenkins_msg}'
+                })
+            
+            return jsonify({'pipelineStages': stages}), 200
 
         # detect commit sha
         rc, out = _run_cmd(['git', 'rev-parse', 'HEAD'], cwd=tmp)
