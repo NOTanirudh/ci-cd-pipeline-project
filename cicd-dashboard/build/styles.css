@@ -1,0 +1,32 @@
+:root{
+  --bg:#eaf6ff; --card:#fff; --accent:#2d7be5; --muted:#6b7280;
+}
+*{box-sizing:border-box}
+body{font-family:Inter, Arial, sans-serif;margin:0;background:linear-gradient(180deg,var(--bg) 0%, #f8fcff 100%);color:#1f2937}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 28px;background:rgba(255,255,255,0.6);box-shadow:0 1px 0 rgba(0,0,0,0.05)}
+.brand{font-weight:700;font-size:20px}
+.user{font-size:14px}
+.container{max-width:1100px;margin:36px auto;padding:0 16px}
+.hero{text-align:center;padding:48px 0}
+.hero h1{font-size:40px;margin:0 0 8px}
+.lead{color:var(--muted);margin-bottom:24px}
+.cards{display:flex;gap:18px;justify-content:center;margin:24px 0}
+.card{background:var(--card);padding:18px;border-radius:12px;width:210px;box-shadow:0 6px 18px rgba(13,38,76,0.06)}
+.card h3{margin:0 0 8px}
+.cta{margin-top:18px}
+.btn{background:var(--accent);color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block}
+
+.repo-list{display:flex}
+.sidebar{width:200px;background:#fff;padding:18px;border-radius:8px;margin-right:18px;box-shadow:0 6px 18px rgba(13,38,76,0.04)}
+.sidebar ul{list-style:none;padding:0;margin:0}
+.sidebar li{padding:12px 8px;border-radius:6px;color:var(--muted);margin-bottom:8px}
+.sidebar li.active{background:linear-gradient(180deg,#f3f9ff,#fff);color:var(--accent);font-weight:600}
+.repos{flex:1;background:var(--card);padding:20px;border-radius:8px;box-shadow:0 6px 18px rgba(13,38,76,0.04)}
+.search input{width:100%;padding:10px;border-radius:8px;border:1px solid #e5e7eb;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.repo-card{background:#fff;border-radius:10px;padding:16px;border:1px solid #eef2ff}
+.repo-card h3{margin:0 0 6px;color:var(--accent)}
+.repo-card p{color:var(--muted);margin:0 0 12px}
+
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.cards{flex-wrap:wrap}}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.repo-list{flex-direction:column}.sidebar{width:100%;margin-bottom:12px}}

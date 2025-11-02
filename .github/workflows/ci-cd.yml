@@ -13,30 +13,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Frontend: install, test, build, and upload artifact
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install frontend dependencies
-        working-directory: ./cicd-dashboard
-        run: |
-          npm ci
-
-      - name: Run frontend tests
-        working-directory: ./cicd-dashboard
-        env:
-          CI: true
-        run: |
-          npm test --silent -- --watchAll=false
-
-      - name: Build frontend
-        working-directory: ./cicd-dashboard
-        run: |
-          npm run build
-
-      - name: Upload frontend build artifact
+      # Frontend: static build included in repository (static HTML/CSS)
+      - name: Upload static frontend artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
